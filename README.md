@@ -1,42 +1,13 @@
-# ✨ Full Stack Realtime Chat App ✨
+# Chatify – A Real-Time Chat Application
 
-![Demo App](/frontend/public/screenshot-for-readme.png)
+This is a real-time chat app built using [your tech stack here, e.g., MERN stack, Socket.io, etc.]. Users can send and receive messages instantly and user authentication.
 
-[Video Tutorial on Youtube](https://youtu.be/ntKkVrQqBYY)
+![Project Screenshot](SS_Image/Screenshot%20(89).png)
+![Project Screenshot](SS_Image/Screenshot%20(90).png)
+![Project Screenshot](SS_Image/Screenshot%20(91).png)
+![Project Screenshot](SS_Image/Screenshot%20(92).png)
+![Project Screenshot](SS_Image/Screenshot%20(93).png)
+![Project Screenshot](SS_Image/Screenshot%20(94).png)
+![Project Screenshot](SS_Image/Screenshot%20(95).png)
 
-Highlights:
 
-- 🌟 Tech stack: MERN + Socket.io + TailwindCSS + Daisy UI
-- 🎃 Authentication && Authorization with JWT
-- 👾 Real-time messaging with Socket.io
-- 🚀 Online user status
-- 👌 Global state management with Zustand
-- 🐞 Error handling both on the server and on the client
-- ⭐ At the end Deployment like a pro for FREE!
-- ⏳ And much more!
-
-### Setup .env file
-
-```js
-MONGODB_URI=...
-PORT=5001
-JWT_SECRET=...
-
-CLOUDINARY_CLOUD_NAME=...
-CLOUDINARY_API_KEY=...
-CLOUDINARY_API_SECRET=...
-
-NODE_ENV=development
-```
-
-### Build the app
-
-```shell
-npm run build
-```
-
-### Start the app
-
-```shell
-npm start
-```
