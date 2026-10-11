@@ -1,15 +1,17 @@
 # Chatify
 
-A real-time chat application with **direct messages and group chats**. Messages
-arrive over a websocket without a refresh, you can see who is online, who is
-typing, and how many people have read what you sent.
+> Real-time chat with direct messages and groups: presence, typing indicators, read receipts, photos and message deletion.
 
-**Stack:** React 18 + Vite + Tailwind/daisyUI · Express + Socket.IO · MongoDB ·
-Docker. Deployed as a single container that serves both the API and the built
-frontend. 93 backend tests against an in-memory MongoDB, plus a Playwright
-journey that drives three signed-in users at once.
+**[Live demo](https://chatify-13-205-125-184.sslip.io)** · Login `ananya@demo.chat` / `demo1234` (open a second browser as `rahul@demo.chat` to watch messages arrive live)
 
-**Live:** https://chatify-13-205-125-184.sslip.io (demo accounts below, password `demo1234`)
+**Stack:** React · Vite · Tailwind/daisyUI · Express · Socket.IO · MongoDB · AWS S3 · Docker · AWS EC2
+
+## At a glance
+
+- **Realtime that holds up:** one Socket.IO room per conversation with cookie-authenticated sockets; membership is checked on every event, typing clears on disconnect, and missed messages are fetched after a reconnect.
+- **Accurate receipts:** "Seen by N" counts each reader once, using their previous read time; unread counts are computed in MongoDB instead of loading message history.
+- **Private media:** photos are re-encoded to WebP with location data stripped, kept in a private S3 bucket, and served only to members of that chat; messages can be deleted for everyone and chats cleared for yourself.
+- **Deployed and tested:** runs on AWS EC2 with Docker Compose and Caddy (automatic HTTPS); 112 automated tests (103 API, 3 UI, 6 Playwright journeys driving three users at once), run against the live site.
 
 ![Group conversation](docs/screenshots/07-group.png)
 
@@ -25,6 +27,7 @@ journey that drives three signed-in users at once.
 | **Presence** | A live list of who is online, tracked per connection so several tabs do not fight each other |
 | **Typing indicators** | Scoped to the conversation, and in a group it names who is typing |
 | **Read receipts** | *Sent* → *Seen* in a direct chat; *Seen by 3* → *Seen by all* in a group |
+| **Delete** | Delete your own message for everyone ("This message was deleted"), or clear a chat for yourself only |
 | **System notes** | "Ananya added Priya", "Rahul left the group" — recorded in the transcript |
 | **Unread counts** | Per-conversation badges, counted per member, most recent chat on top |
 | **Image sharing** | Photos, avatars and group pictures are re-encoded to WebP (max 1280px, location data stripped) and kept in a private S3 bucket; `/api/media` serves them only to people allowed to see them |
