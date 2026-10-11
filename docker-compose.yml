@@ -1,0 +1,39 @@
+# Run the whole thing locally with one command:
+#   docker compose up --build
+# Then open http://localhost:5001
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      # Published on 27018 so it does not collide with a MongoDB already
+      # installed on the host. Inside the compose network it is still 27017.
+      - "27018:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      NODE_ENV: production
+      PORT: 5001
+      MONGO_URI: mongodb://mongo:27017/chatify
+      # Local only. Generate a real one for any deployment.
+      JWT_SECRET: local-compose-secret-change-me-0123456789abcdef
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo-data:

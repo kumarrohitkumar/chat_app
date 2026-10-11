@@ -1,13 +1,314 @@
-# Chatify – A Real-Time Chat Application
+# Chatify
 
-This is a real-time chat app built using [your tech stack here, e.g., MERN stack, Socket.io, etc.]. Users can send and receive messages instantly and user authentication.
+A real-time chat application with **direct messages and group chats**. Messages
+arrive over a websocket without a refresh, you can see who is online, who is
+typing, and how many people have read what you sent.
 
-![Project Screenshot](SS_Image/Screenshot%20(89).png)
-![Project Screenshot](SS_Image/Screenshot%20(90).png)
-![Project Screenshot](SS_Image/Screenshot%20(91).png)
-![Project Screenshot](SS_Image/Screenshot%20(92).png)
-![Project Screenshot](SS_Image/Screenshot%20(93).png)
-![Project Screenshot](SS_Image/Screenshot%20(94).png)
-![Project Screenshot](SS_Image/Screenshot%20(95).png)
+**Stack:** React 18 + Vite + Tailwind/daisyUI · Express + Socket.IO · MongoDB ·
+Docker. Deployed as a single container that serves both the API and the built
+frontend. 77 backend tests against an in-memory MongoDB, plus a 21-step
+browser test that drives four signed-in users at once.
 
+![Group conversation](docs/screenshots/07-group.png)
 
+---
+
+## What it does
+
+| | |
+|---|---|
+| **Direct messages** | One-to-one chats, created the first time you message someone |
+| **Group chats** | Up to 100 people, with admins, a member list, rename, add, remove and leave |
+| **Real-time messaging** | Socket.IO delivers a message to every tab every member has open, with no polling |
+| **Presence** | A live list of who is online, tracked per connection so several tabs do not fight each other |
+| **Typing indicators** | Scoped to the conversation, and in a group it names who is typing |
+| **Read receipts** | *Sent* → *Seen* in a direct chat; *Seen by 3* → *Seen by all* in a group |
+| **System notes** | "Ananya added Priya", "Rahul left the group" — recorded in the transcript |
+| **Unread counts** | Per-conversation badges, counted per member, most recent chat on top |
+| **Image sharing** | Uploaded to Cloudinary and resized on the way through; optional — the app runs without it |
+| **Contact search** | Filter by name or email, plus an "online only" toggle |
+| **Conversation previews** | Each row shows the last message, who sent it, and when |
+| **Desktop alerts** | A chime, and a system notification when the tab is in the background |
+| **Paginated history** | Loads 40 messages at a time and fetches older ones as you scroll up |
+| **32 themes** | daisyUI themes, remembered per browser |
+| **Auth** | Email + password, bcrypt hashes, a signed httpOnly cookie that JavaScript cannot read |
+| **Built for a phone** | The contact list and the conversation take turns on a narrow screen |
+
+---
+
+## Running it
+
+### Option 1 — Docker (one command)
+
+```bash
+docker compose up --build
+```
+
+Open <http://localhost:5001>. This starts MongoDB and the app together.
+MongoDB is published on **27018**, so it will not clash with one already
+installed on your machine.
+
+To load the demo accounts:
+
+```bash
+docker compose exec app node src/seeds/user.seed.js
+```
+
+### Option 2 — Local Node
+
+You need Node 18+ and a MongoDB you can reach (local, or a free Atlas cluster).
+
+```bash
+# 1. configure
+cp backend/.env.example backend/.env     # then fill in MONGO_URI and JWT_SECRET
+
+# 2. install
+npm install --prefix backend
+npm install --prefix frontend
+
+# 3. demo data (optional but recommended)
+npm run seed
+
+# 4. two terminals
+npm run dev:api      # API + websocket on :5001
+npm run dev:web      # app on :5173
+```
+
+Vite proxies `/api` and `/socket.io` to the API, so the browser only ever sees
+one origin — the same arrangement as production.
+
+### Upgrading an existing database
+
+Databases written before group chat existed stored `senderId` + `receiverId` on
+each message and had no `conversations` collection. A one-off script converts
+them:
+
+```bash
+node src/scripts/migrate-to-conversations.js --dry-run   # report only
+node src/scripts/migrate-to-conversations.js             # convert
+```
+
+It groups legacy messages into direct conversations and is safe to run twice —
+anything already carrying a `conversationId` is skipped. It is covered by
+`tests/migration.test.js`, which checks the result is something the live API
+can read and keep writing to.
+
+### Demo accounts
+
+After seeding, sign in with any of these and the password **`demo1234`**:
+
+```
+ananya@demo.chat   rahul@demo.chat   priya@demo.chat
+arjun@demo.chat    sneha@demo.chat   vikram@demo.chat
+```
+
+Ananya and Rahul already have a direct conversation, and there is a group
+called **Release Crew** with Ananya, Rahul, Priya and Arjun in it (Ananya is
+its admin). Sneha and Vikram are in neither, which is handy for showing that a
+non-member sees nothing.
+
+To see messaging live, open two or three browsers (or one normal window and
+one private window) and sign in as different people.
+
+---
+
+## Deploying
+
+The repository builds into **one container** that serves the API, the
+websocket and the built frontend from a single port — nothing else to host, no
+CORS to configure.
+
+### Render
+
+1. Create a free MongoDB Atlas cluster and copy the connection string.
+2. Push this repository to GitHub.
+3. On Render: **New → Blueprint**, select the repository. `render.yaml` describes
+   the service.
+4. When prompted, paste `MONGO_URI`. Render generates `JWT_SECRET` for you.
+   The three Cloudinary values are optional.
+
+Render health-checks `/api/health`, which reports database state and whether
+image upload is configured.
+
+### Anywhere else
+
+The `Dockerfile` is plain — Railway, Fly.io, a VPS, or ECS all work:
+
+```bash
+docker build -t chatify .
+docker run -p 5001:5001 \
+  -e MONGO_URI="mongodb+srv://..." \
+  -e JWT_SECRET="$(openssl rand -hex 32)" \
+  -e NODE_ENV=production \
+  chatify
+```
+
+### Tests
+
+```bash
+npm test --prefix backend
+```
+
+**77 tests**, split across five files:
+
+| File | Covers |
+|---|---|
+| `tests/auth.test.js` | Signup and login rules, duplicate emails, forged and expired tokens, profile updates |
+| `tests/direct.test.js` | Opening a direct chat, pagination, unread counts, read receipts, and that a third party can read nothing |
+| `tests/group.test.js` | Creating groups, admin-only rename/add/remove, leaving, admin promotion, auto-delete, per-member unread and read counts |
+| `tests/socket.test.js` | Cookie authentication, the userId-spoofing attack, presence across tabs, and room delivery — including that an outsider receives nothing and someone added mid-session starts receiving straight away |
+| `tests/migration.test.js` | The pre-group upgrade: pairing, previews, field cleanup, dry-run, idempotence, and that the live API can read and extend the migrated data |
+
+They spin up their own in-memory MongoDB, so nothing needs to be installed or
+running first.
+
+There is also a browser test that signs in **four users at once** and drives
+the real UI through 21 checks — group fan-out, typing, "Seen by N", unread
+badges, creating a group, adding a member live, admin restrictions, renaming
+and leaving. GitHub Actions runs the unit tests, the frontend lint and build,
+and a Docker build on every push — see
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+### Environment variables
+
+| Variable | Required | Notes |
+|---|---|---|
+| `MONGO_URI` | yes | Connection string. The server refuses to start without it |
+| `JWT_SECRET` | yes | Signs the auth cookie. 32+ characters in production |
+| `PORT` | no | Defaults to 5001 |
+| `NODE_ENV` | no | `production` enables the static frontend, secure cookies and CSP |
+| `CLIENT_URL` | no | Development only — the origin Vite serves from |
+| `CLOUDINARY_*` | no | Leave unset and image upload is simply disabled |
+
+---
+
+## How it fits together
+
+```
+Browser
+  │
+  │  HTTPS       POST /api/auth/login              ─► bcrypt ─► signed httpOnly cookie
+  │              GET  /api/conversations            ─► the sidebar, in 2 queries
+  │              GET  /api/conversations/:id/messages ─► paginated history
+  │
+  │  WebSocket   handshake carries the same cookie
+  │              ─► verified, then the socket joins a room per conversation
+  ▼
+Express ── Socket.IO ── room: conversation:<id>
+  │                  └─ in-memory presence map (userId → set of socket ids)
+  ▼
+MongoDB   users
+          conversations   type, members[{ user, role, lastReadAt }], lastMessage
+          messages        indexed on (conversationId, createdAt)
+```
+
+**One model for both kinds of chat.** A direct chat is a conversation with two
+members and `type: "direct"`; a group is the same document with more members
+and a name. Everything built on top — unread counts, previews, typing, read
+state, pagination — works for groups with no second code path. A direct
+conversation also carries a `directKey` (the two ids, sorted) under a unique
+index, so two people cannot end up with two separate chats by clicking at the
+same moment.
+
+**Read state lives on the membership, not the message.** Each member has a
+`lastReadAt`. A conversation has a handful of members but may have thousands of
+messages, so "how many people have read this?" is a count over members rather
+than an array that grows on every message.
+
+**Sending a message:** the browser POSTs it, the server saves it, then emits it
+once to the conversation's room. Every member's every tab receives it,
+including the sender's — so no client appends anything locally and all devices
+show exactly what the database holds. A group of fifty costs the same emit as a
+direct chat.
+
+**Membership and rooms stay in step.** Adding someone to a group joins their
+live sockets to the room immediately; removing them leaves it. Neither side has
+to reload.
+
+**Identity:** the websocket reads the user from the signed cookie during the
+handshake. Nothing the browser sends can change who the server thinks you are.
+
+**Every conversation endpoint goes through one membership check**, so access
+control cannot be enforced in one place and forgotten in another. A
+conversation you are not in answers `404`, not `403` — a `403` would confirm
+that the id exists.
+
+### Layout
+
+```
+backend
+  src/app.js                 builds the express app — importable, so tests need no port
+  src/index.js               http server, socket, db connect, graceful shutdown
+  src/lib/env.js             validated config — fails at boot, not at first request
+  src/lib/socket.js          socket auth, presence, conversation rooms, typing
+  src/lib/token.js           sign / verify / cookie handling
+  src/lib/validate.js        input validators
+  src/lib/cloudinary.js      optional image upload
+  src/models/                user, conversation, message (+ indexes)
+  src/services/              membership checks, group creation, the sidebar query
+  src/controllers/           auth, conversation
+  src/middleware/            protectRoute, rate limits, error handler
+  src/seeds/                 demo accounts, a direct chat and a group
+  src/scripts/               one-off migration for pre-group databases
+  tests/                     vitest + supertest against an in-memory MongoDB
+
+frontend/src
+  store/                     zustand: auth, chat, theme
+  components/                sidebar, chat container, input, typing indicator,
+                             new-chat modal, group info panel, connection
+                             banner, error boundary
+  pages/                     login, signup, home, profile, settings, 404
+  lib/axios.js               one API client, safe error extraction
+  lib/notify.js              chime (Web Audio) and desktop notifications
+  index.css                  animation layer, reduced-motion opt-out
+```
+
+---
+
+## Notes on the implementation
+
+- **The auth cookie is `httpOnly` and `sameSite`.** The token never touches
+  `localStorage`, so a cross-site script cannot read it.
+- **Rate limits** sit on sign-in and sign-up (20 per 15 minutes, successful
+  attempts not counted) and on sending messages (60 a minute).
+- **The server validates everything it stores** — email shape, name and message
+  length, and that an uploaded file really is an image under 5 MB.
+- **Login does the same work whether or not the email exists**, so response
+  timing does not reveal which addresses are registered.
+- **Passwords are `select: false`** on the model, so they cannot leak through a
+  query someone forgot to project.
+- **The database connects before the server listens.** A bad connection string
+  fails the deploy instead of producing a server that 500s on every request.
+- **Presence is a set of sockets per user**, so closing one tab does not mark
+  someone offline everywhere.
+- **Dependencies are locked.** Both packages commit a `package-lock.json` and
+  the image installs with `npm ci`, so a build today and a build next month
+  produce the same thing.
+- **Motion is CSS only** — no animation library in the bundle — and every
+  animation is switched off under `prefers-reduced-motion`.
+- **A render error shows an error screen**, not a blank page: the route tree
+  sits inside an error boundary.
+
+### More screenshots
+
+| Group chat | Group details |
+|---|---|
+| ![Group chat](docs/screenshots/07-group.png) | ![Group details](docs/screenshots/08-group-info.png) |
+
+| Starting a group | Direct chat |
+|---|---|
+| ![New group](docs/screenshots/09-new-group.png) | ![Direct chat](docs/screenshots/03-conversation.png) |
+
+| Sign in | Chat list |
+|---|---|
+| ![Sign in](docs/screenshots/01-sign-in.png) | ![Chat list](docs/screenshots/02-contacts.png) |
+
+| Themes | Profile |
+|---|---|
+| ![Themes](docs/screenshots/04-themes.png) | ![Profile](docs/screenshots/05-profile.png) |
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).

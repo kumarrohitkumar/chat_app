@@ -1,41 +1,33 @@
 import { Users } from "lucide-react";
 
-const SidebarSkeleton = () => {
-  // Create 8 skeleton items
-  const skeletonContacts = Array(8).fill(null);
-
-  return (
-    <aside
-      className="h-full w-20 lg:w-72 border-r border-base-300 
-    flex flex-col transition-all duration-200"
-    >
-      {/* Header */}
-      <div className="border-b border-base-300 w-full p-5">
-        <div className="flex items-center gap-2">
-          <Users className="w-6 h-6" />
-          <span className="font-medium hidden lg:block">Contacts</span>
-        </div>
+/** Matches the real sidebar's dimensions exactly, so nothing jumps on load. */
+const SidebarSkeleton = () => (
+  <aside className="h-full w-full md:w-80 border-r border-base-300 flex flex-col">
+    <div className="border-b border-base-300 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Users className="size-5" />
+        <span className="font-semibold">Contacts</span>
       </div>
+      <div className="skeleton shimmer h-8 w-full rounded-lg" />
+      <div className="skeleton shimmer h-5 w-28 rounded" />
+    </div>
 
-      {/* Skeleton Contacts */}
-      <div className="overflow-y-auto w-full py-3">
-        {skeletonContacts.map((_, idx) => (
-          <div key={idx} className="w-full p-3 flex items-center gap-3">
-            {/* Avatar skeleton */}
-            <div className="relative mx-auto lg:mx-0">
-              <div className="skeleton size-12 rounded-full" />
-            </div>
-
-            {/* User info skeleton - only visible on larger screens */}
-            <div className="hidden lg:block text-left min-w-0 flex-1">
-              <div className="skeleton h-4 w-32 mb-2" />
-              <div className="skeleton h-3 w-16" />
-            </div>
+    <div className="overflow-hidden flex-1 py-1">
+      {Array.from({ length: 7 }).map((_, index) => (
+        <div
+          key={index}
+          style={{ "--i": index }}
+          className="stagger w-full px-4 py-3 flex items-center gap-3"
+        >
+          <div className="skeleton shimmer size-12 rounded-full shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="skeleton shimmer h-4 rounded" style={{ width: `${45 + index * 6}%` }} />
+            <div className="skeleton shimmer h-3 rounded" style={{ width: `${60 + index * 4}%` }} />
           </div>
-        ))}
-      </div>
-    </aside>
-  );
-};
+        </div>
+      ))}
+    </div>
+  </aside>
+);
 
 export default SidebarSkeleton;

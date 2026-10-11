@@ -1,0 +1,30 @@
+# Render blueprint. Push this repo, then on render.com:
+#   New  ->  Blueprint  ->  pick this repository.
+# Render reads this file and creates the service. Set the three secret values
+# marked `sync: false` in the dashboard when prompted.
+services:
+  - type: web
+    name: chatify
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5001
+      # Paste a MongoDB Atlas connection string.
+      - key: MONGO_URI
+        sync: false
+      # Render can generate this one for you.
+      - key: JWT_SECRET
+        generateValue: true
+      # Optional — leave unset and image upload simply stays off.
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
