@@ -23,7 +23,9 @@ function s3Driver({ bucket, region, accessKeyId, secretAccessKey }) {
         const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
         return { body: Buffer.from(await res.Body.transformToByteArray()), contentType: res.ContentType };
       } catch (error) {
-        if (error instanceof NoSuchKey || error?.name === "NoSuchKey") return null;
+        // Without s3:ListBucket, S3 answers a missing key with 403 instead of 404.
+        const status = error?.$metadata?.httpStatusCode;
+        if (error instanceof NoSuchKey || error?.name === "NoSuchKey" || status === 404 || status === 403) return null;
         throw error;
       }
     },
