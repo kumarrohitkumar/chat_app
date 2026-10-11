@@ -6,8 +6,10 @@ typing, and how many people have read what you sent.
 
 **Stack:** React 18 + Vite + Tailwind/daisyUI · Express + Socket.IO · MongoDB ·
 Docker. Deployed as a single container that serves both the API and the built
-frontend. 77 backend tests against an in-memory MongoDB, plus a 21-step
-browser test that drives four signed-in users at once.
+frontend. 93 backend tests against an in-memory MongoDB, plus a Playwright
+journey that drives three signed-in users at once.
+
+**Live:** https://chatify-13-205-125-184.sslip.io (demo accounts below, password `demo1234`)
 
 ![Group conversation](docs/screenshots/07-group.png)
 
@@ -25,7 +27,7 @@ browser test that drives four signed-in users at once.
 | **Read receipts** | *Sent* → *Seen* in a direct chat; *Seen by 3* → *Seen by all* in a group |
 | **System notes** | "Ananya added Priya", "Rahul left the group" — recorded in the transcript |
 | **Unread counts** | Per-conversation badges, counted per member, most recent chat on top |
-| **Image sharing** | Uploaded to Cloudinary and resized on the way through; optional — the app runs without it |
+| **Image sharing** | Photos, avatars and group pictures are re-encoded to WebP (max 1280px, location data stripped) and kept in a private S3 bucket; `/api/media` serves them only to people allowed to see them |
 | **Contact search** | Filter by name or email, plus an "online only" toggle |
 | **Conversation previews** | Each row shows the last message, who sent it, and when |
 | **Desktop alerts** | A chime, and a system notification when the tab is in the background |
@@ -118,17 +120,32 @@ The repository builds into **one container** that serves the API, the
 websocket and the built frontend from a single port — nothing else to host, no
 CORS to configure.
 
+### One server with HTTPS (how the live demo runs)
+
+The live demo is one small AWS EC2 instance (Mumbai) running `deploy/docker-compose.yml`:
+the app container plus [Caddy](https://caddyserver.com), which gets a Let's Encrypt
+certificate automatically and proxies HTTP and the websocket to the app.
+
+```bash
+# on a server with Docker and the compose plugin
+git clone https://github.com/kumarrohitkumar/chat_app.git /opt/chatify
+cd /opt/chatify/deploy
+cp .env.example .env          # DOMAIN, MONGO_URI, JWT_SECRET, S3_* — see below
+docker compose up -d --build
+```
+
+`DOMAIN` must point at the server. Without a domain of your own,
+`chatify-<ip-with-dashes>.sslip.io` resolves to that IP and works with Let's Encrypt.
+Open ports 80 and 443. To update: `git pull && docker compose up -d --build`.
+
+Run a single instance: who is online and the socket rooms live in memory.
+
 ### Render
 
-1. Create a free MongoDB Atlas cluster and copy the connection string.
-2. Push this repository to GitHub.
-3. On Render: **New → Blueprint**, select the repository. `render.yaml` describes
-   the service.
-4. When prompted, paste `MONGO_URI`. Render generates `JWT_SECRET` for you.
-   The three Cloudinary values are optional.
-
-Render health-checks `/api/health`, which reports database state and whether
-image upload is configured.
+`render.yaml` still describes a Render Blueprint (Docker web service). Paste
+`MONGO_URI` and the `S3_*` values when prompted; Render generates `JWT_SECRET`.
+On the free plan the service sleeps after 15 idle minutes, which drops live
+connections, so the EC2 setup above is the better fit for a chat app.
 
 ### Anywhere else
 
@@ -140,16 +157,19 @@ docker run -p 5001:5001 \
   -e MONGO_URI="mongodb+srv://..." \
   -e JWT_SECRET="$(openssl rand -hex 32)" \
   -e NODE_ENV=production \
+  -e S3_BUCKET=your-bucket -e S3_ACCESS_KEY_ID=... -e S3_SECRET_ACCESS_KEY=... \
   chatify
 ```
 
 ### Tests
 
 ```bash
-npm test --prefix backend
+npm test               # backend (93) and frontend (3) unit tests
+npm run test:e2e       # Playwright journey; start the API and Vite first
+BASE_URL=https://chatify-13-205-125-184.sslip.io npm run test:e2e   # same journey against the live site
 ```
 
-**77 tests**, split across five files:
+The backend has **93 tests**:
 
 | File | Covers |
 |---|---|
@@ -158,14 +178,17 @@ npm test --prefix backend
 | `tests/group.test.js` | Creating groups, admin-only rename/add/remove, leaving, admin promotion, auto-delete, per-member unread and read counts |
 | `tests/socket.test.js` | Cookie authentication, the userId-spoofing attack, presence across tabs, and room delivery — including that an outsider receives nothing and someone added mid-session starts receiving straight away |
 | `tests/migration.test.js` | The pre-group upgrade: pairing, previews, field cleanup, dry-run, idempotence, and that the live API can read and extend the migrated data |
+| `tests/media.test.js` | Image upload and re-encoding, who may fetch an avatar or a chat photo, fake images, path tricks |
+| `tests/privacy.test.js` | Contacts without emails, exact-email lookup, unread counts, body-size limits, password length |
 
 They spin up their own in-memory MongoDB, so nothing needs to be installed or
 running first.
 
-There is also a browser test that signs in **four users at once** and drives
-the real UI through 21 checks — group fan-out, typing, "Seen by N", unread
-badges, creating a group, adding a member live, admin restrictions, renaming
-and leaving. GitHub Actions runs the unit tests, the frontend lint and build,
+The Playwright journey (`e2e/chat.spec.js`) signs up **three users at once** and
+drives the real UI: finding people (no emails shown), a direct chat with typing
+and "Seen", a photo message served from `/api/media`, catching up on messages
+sent while offline, and a group with "Seen by all" and removing a member with
+confirmation. It creates accounts named `e2e.*@example.com`. GitHub Actions runs the unit tests, the frontend lint and build,
 and a Docker build on every push — see
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
@@ -178,7 +201,8 @@ and a Docker build on every push — see
 | `PORT` | no | Defaults to 5001 |
 | `NODE_ENV` | no | `production` enables the static frontend, secure cookies and CSP |
 | `CLIENT_URL` | no | Development only — the origin Vite serves from |
-| `CLOUDINARY_*` | no | Leave unset and image upload is simply disabled |
+| `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | in production | Private bucket for images. The IAM user needs only `s3:PutObject` and `s3:GetObject` on it. Without `S3_BUCKET`, development keeps images in memory |
+| `ALLOW_MEMORY_IMAGES` | no | `true` lets production run without S3 (local `docker compose` only) |
 
 ---
 
@@ -243,7 +267,8 @@ backend
   src/lib/socket.js          socket auth, presence, conversation rooms, typing
   src/lib/token.js           sign / verify / cookie handling
   src/lib/validate.js        input validators
-  src/lib/cloudinary.js      optional image upload
+  src/lib/storage.js         image re-encoding and S3 / in-memory storage
+  src/routes/media.route.js  serves images to people allowed to see them
   src/models/                user, conversation, message (+ indexes)
   src/services/              membership checks, group creation, the sidebar query
   src/controllers/           auth, conversation

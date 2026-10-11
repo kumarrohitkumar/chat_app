@@ -21,10 +21,12 @@ services:
       # Render can generate this one for you.
       - key: JWT_SECRET
         generateValue: true
-      # Optional — leave unset and image upload simply stays off.
-      - key: CLOUDINARY_CLOUD_NAME
+      # Private S3 bucket for images (required in production).
+      - key: S3_BUCKET
         sync: false
-      - key: CLOUDINARY_API_KEY
+      - key: S3_REGION
+        value: ap-south-1
+      - key: S3_ACCESS_KEY_ID
         sync: false
-      - key: CLOUDINARY_API_SECRET
+      - key: S3_SECRET_ACCESS_KEY
         sync: false

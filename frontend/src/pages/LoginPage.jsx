@@ -109,6 +109,14 @@ const LoginPage = () => {
               </Link>
             </p>
           </div>
+
+          <div className="rounded-xl border border-dashed border-base-300 p-4 text-sm">
+            <p className="font-medium">Just looking around?</p>
+            <p className="text-base-content/60 mt-1">
+              Sign in as <span className="font-mono text-base-content">ananya@demo.chat</span> (or rahul, priya, arjun) with password{" "}
+              <span className="font-mono text-base-content">demo1234</span>. Open a second browser as another person to see messages arrive live.
+            </p>
+          </div>
         </div>
       </div>
 
