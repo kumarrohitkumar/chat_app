@@ -1,13 +1,15 @@
 {
-  "name": "chat-app",
+  "name": "chatify",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Real-time one-to-one chat — React, Express, Socket.IO, MongoDB",
+  "private": true,
   "scripts": {
     "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
-    "start": "npm run start --prefix backend"
+    "start": "npm run start --prefix backend",
+    "seed": "npm run seed --prefix backend",
+    "dev:api": "npm run dev --prefix backend",
+    "dev:web": "npm run dev --prefix frontend",
+    "lint": "npm run lint --prefix frontend"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "license": "MIT"
 }

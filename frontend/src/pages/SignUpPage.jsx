@@ -40,7 +40,7 @@ const SignUpPage = () => {
     <div className="min-h-screen grid lg:grid-cols-2">
       {/* left side */}
       <div className="flex flex-col justify-center items-center p-6 sm:p-12">
-        <div className="w-full max-w-md space-y-8">
+        <div className="w-full max-w-md space-y-8 animate-fade-up">
           {/* LOGO */}
           <div className="text-center mb-8">
             <div className="flex flex-col items-center gap-2 group">
@@ -69,7 +69,7 @@ const SignUpPage = () => {
                 </div>
                 <input
                   type="text"
-                  className={`input input-bordered w-full pl-10`}
+                  className="input input-bordered w-full pl-10 transition-all duration-200 focus:ring-2 focus:ring-primary/30"
                   placeholder="John Doe"
                   value={formData.fullName}
                   onChange={(e) =>
@@ -88,7 +88,7 @@ const SignUpPage = () => {
                 </div>
                 <input
                   type="email"
-                  className={`input input-bordered w-full pl-10`}
+                  className="input input-bordered w-full pl-10 transition-all duration-200 focus:ring-2 focus:ring-primary/30"
                   placeholder="you@example.com"
                   value={formData.email}
                   onChange={(e) =>
@@ -107,7 +107,7 @@ const SignUpPage = () => {
                 </div>
                 <input
                   type={showPassword ? "text" : "password"}
-                  className={`input input-bordered w-full pl-10`}
+                  className="input input-bordered w-full pl-10 transition-all duration-200 focus:ring-2 focus:ring-primary/30"
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={(e) =>
@@ -130,7 +130,7 @@ const SignUpPage = () => {
             {/* button will be disabled if the isSigningUp state is true */}
             <button
               type="submit"
-              className="btn btn-primary w-full"
+              className="press btn btn-primary w-full"
               disabled={isSigningUp}
             >
               {isSigningUp ? (

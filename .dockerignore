@@ -1,0 +1,19 @@
+**/node_modules
+**/dist
+.git
+.github
+SS_Image
+docs/screenshots
+*.md
+!README.md
+.env
+**/.env
+**/.env.*
+!**/.env.example
+*.log
+.DS_Store
+*.exe
+
+# Tests do not belong in the runtime image
+backend/tests
+backend/vitest.config.js
