@@ -53,7 +53,15 @@ export async function findOrCreateDirect(userId, otherId) {
   const directKey = Conversation.buildDirectKey(userId, otherId);
 
   const existing = await Conversation.findOne({ directKey });
-  if (existing) return existing;
+  if (existing) {
+    // Reopening a chat I deleted brings it back to my list (history stays cleared).
+    const me = existing.members.find((m) => String(m.user) === String(userId));
+    if (me?.hidden) {
+      me.hidden = false;
+      await existing.save();
+    }
+    return existing;
+  }
 
   try {
     return await Conversation.create({
@@ -106,7 +114,11 @@ export async function appendMessage(conversation, { senderId, text, image, syste
     senderId: system ? null : senderId,
     hasImage: Boolean(image),
     system,
+    deleted: false,
   };
+
+  // Anyone who deleted this chat gets it back, starting from this message.
+  for (const member of conversation.members) member.hidden = false;
 
   // The sender has obviously read their own message.
   if (!system) {
@@ -125,7 +137,9 @@ export async function appendMessage(conversation, { senderId, text, image, syste
  * conversations or members there are.
  */
 export async function listForUser(userId) {
-  const conversations = await Conversation.find({ "members.user": userId })
+  const conversations = await Conversation.find({
+    members: { $elemMatch: { user: new mongoose.Types.ObjectId(String(userId)), hidden: { $ne: true } } },
+  })
     .sort({ lastMessageAt: -1, updatedAt: -1 })
     .populate("members.user", "fullName profilePic")
     .lean();
@@ -140,6 +154,7 @@ export async function listForUser(userId) {
     {
       $match: {
         $or: conversations.map((c) => ({ conversationId: c._id, createdAt: { $gt: lastRead(c) } })),
+        deletedAt: null,
         senderId: { $ne: new mongoose.Types.ObjectId(String(userId)) },
         system: { $ne: true },
       },
@@ -170,7 +185,11 @@ export async function listForUser(userId) {
       otherUserId: conversation.type === "direct" ? others[0]?.user._id ?? null : null,
       isAdmin: me?.role === "admin",
       lastMessageAt: conversation.lastMessageAt,
-      lastMessage: conversation.lastMessage ?? null,
+      // A preview from before I cleared the chat is not mine to see any more.
+      lastMessage:
+        me?.clearedAt && conversation.lastMessageAt && conversation.lastMessageAt <= me.clearedAt
+          ? null
+          : conversation.lastMessage ?? null,
       unreadCount,
     };
   });

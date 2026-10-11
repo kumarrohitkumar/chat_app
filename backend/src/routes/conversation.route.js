@@ -3,6 +3,8 @@ import { protectRoute } from "../middleware/auth.middleware.js";
 import { messageLimiter } from "../middleware/rateLimit.middleware.js";
 import {
   addMembers,
+  deleteConversationForMe,
+  deleteMessage,
   getContacts,
   getMessages,
   listConversations,
@@ -27,6 +29,8 @@ router.post("/group", startGroup);
 router.get("/:id/messages", getMessages);
 router.post("/:id/messages", messageLimiter, sendMessage);
 router.post("/:id/read", markRead);
+router.delete("/:id/messages/:messageId", deleteMessage);
+router.delete("/:id", deleteConversationForMe);
 
 router.patch("/:id", renameGroup);
 router.post("/:id/members", addMembers);

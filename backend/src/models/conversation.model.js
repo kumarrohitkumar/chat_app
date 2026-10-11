@@ -14,6 +14,10 @@ const memberSchema = new mongoose.Schema(
     // a handful of members, but may have thousands of messages.
     lastReadAt: { type: Date, default: null },
     joinedAt: { type: Date, default: Date.now },
+    // "Delete chat" is per person: history before clearedAt is hidden for this
+    // member, and the chat stays off their list until something new arrives.
+    clearedAt: { type: Date, default: null },
+    hidden: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -47,6 +51,7 @@ const conversationSchema = new mongoose.Schema(
       senderId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
       hasImage: { type: Boolean, default: false },
       system: { type: Boolean, default: false },
+      deleted: { type: Boolean, default: false },
     },
   },
   { timestamps: true }

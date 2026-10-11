@@ -201,7 +201,7 @@ and a Docker build on every push — see
 | `PORT` | no | Defaults to 5001 |
 | `NODE_ENV` | no | `production` enables the static frontend, secure cookies and CSP |
 | `CLIENT_URL` | no | Development only — the origin Vite serves from |
-| `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | in production | Private bucket for images. The IAM user needs only `s3:PutObject` and `s3:GetObject` on it. Without `S3_BUCKET`, development keeps images in memory |
+| `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | in production | Private bucket for images. The IAM user needs only `s3:PutObject`, `s3:GetObject` and `s3:DeleteObject` on it. Without `S3_BUCKET`, development keeps images in memory |
 | `ALLOW_MEMORY_IMAGES` | no | `true` lets production run without S3 (local `docker compose` only) |
 
 ---

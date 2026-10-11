@@ -322,3 +322,20 @@ describe("read receipts", () => {
     aSocket.close();
   });
 });
+
+describe("deleting", () => {
+  it("tells everyone in the chat when a message is deleted", async () => {
+    const a = await register();
+    const b = await register();
+    const group = await createGroup(a, "Deleters", [b.user._id]);
+    const msg = await say(a, group._id, "take this back");
+    const jwtCookie = b.cookie.find((c) => c.startsWith("jwt=")).split(";")[0];
+    const bSocket = connect(url, { extraHeaders: { Cookie: jwtCookie }, reconnection: false });
+    await new Promise((resolve) => bSocket.once("ready", resolve));
+
+    const got = waitFor(bSocket, "messageDeleted");
+    await as(a.cookie).delete(`/api/conversations/${group._id}/messages/${msg._id}`).expect(200);
+    expect(await got).toMatchObject({ conversationId: group._id, messageId: msg._id });
+    bSocket.close();
+  });
+});

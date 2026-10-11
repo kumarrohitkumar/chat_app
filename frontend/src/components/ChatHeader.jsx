@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { ArrowLeft, Info, X } from "lucide-react";
+import { ArrowLeft, Info, X, Trash2 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import GroupInfoPanel from "./GroupInfoPanel";
 import Avatar from "./Avatar";
 
 const ChatHeader = () => {
-  const { selected, select, typingUsers } = useChatStore();
+  const { selected, select, typingUsers, deleteConversation } = useChatStore();
+  const [isConfirmingDelete, setConfirmingDelete] = useState(false);
   const { onlineUsers, authUser } = useAuthStore();
   const [isInfoOpen, setInfoOpen] = useState(false);
 
@@ -85,6 +86,15 @@ const ChatHeader = () => {
             )}
 
             <button
+              onClick={() => setConfirmingDelete(true)}
+              aria-label="Delete chat"
+              title="Delete chat"
+              className="press btn btn-ghost btn-sm btn-circle text-base-content/70 hover:text-error"
+            >
+              <Trash2 className="size-5" />
+            </button>
+
+            <button
               onClick={() => select(null)}
               aria-label="Close conversation"
               className="press btn btn-ghost btn-sm btn-circle hidden md:inline-flex"
@@ -94,6 +104,33 @@ const ChatHeader = () => {
           </div>
         </div>
       </div>
+
+      {isConfirmingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in" onClick={() => setConfirmingDelete(false)} role="presentation">
+          <div role="alertdialog" aria-modal="true" aria-label="Delete chat" onClick={(event) => event.stopPropagation()} className="bg-base-100 rounded-2xl shadow-2xl w-full max-w-sm p-5 animate-fade-up">
+            <h2 className="font-semibold text-lg">Delete this chat?</h2>
+            <p className="mt-2 text-sm text-base-content/70">
+              {isGroup
+                ? `The messages in “${selected.name}” will be cleared for you. You stay in the group, and new messages will show up here again.`
+                : `Your messages with ${selected.name} will be cleared for you. ${selected.name} keeps their copy, and a new message brings the chat back.`}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setConfirmingDelete(false)} className="press btn btn-ghost btn-sm">
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setConfirmingDelete(false);
+                  await deleteConversation(selected._id);
+                }}
+                className="press btn btn-error btn-sm"
+              >
+                Delete chat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isInfoOpen && isGroup && (
         <GroupInfoPanel conversation={selected} onClose={() => setInfoOpen(false)} />

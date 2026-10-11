@@ -87,7 +87,11 @@ const Sidebar = () => {
                   ? `${sender.fullName.split(" ")[0]}: `
                   : "";
 
-            const preview = last?.hasImage
+            const preview = last?.deleted
+              ? last.senderId === authUser?._id
+                ? "You deleted a message"
+                : "Message deleted"
+              : last?.hasImage
               ? `${prefix}Photo`
               : last?.text
                 ? `${prefix}${last.text}`

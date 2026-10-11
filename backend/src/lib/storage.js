@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { GetObjectCommand, NoSuchKey, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, NoSuchKey, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import sharp from "sharp";
 import { env } from "./env.js";
 
@@ -14,6 +14,9 @@ function s3Driver({ bucket, region, accessKeyId, secretAccessKey }) {
     kind: "s3",
     async put(key, body, contentType) {
       await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }));
+    },
+    async remove(key) {
+      await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
     },
     async get(key) {
       try {
@@ -37,6 +40,9 @@ function memoryDriver() {
     },
     async get(key) {
       return files.get(key) ?? null;
+    },
+    async remove(key) {
+      files.delete(key);
     },
   };
 }
@@ -75,4 +81,14 @@ export async function uploadImage(dataUrl, folder, ownerId) {
   const key = `${folder}/${ownerId}/${randomUUID()}.webp`;
   await storage.put(key, webp, "image/webp");
   return `/api/media/${key}`;
+}
+
+/** Delete an image given its /api/media path. Never throws: a stray file is not worth failing a request over. */
+export async function removeImage(mediaPath) {
+  if (typeof mediaPath !== "string" || !mediaPath.startsWith("/api/media/")) return;
+  try {
+    await storage.remove(mediaPath.slice("/api/media/".length));
+  } catch (error) {
+    console.error("[storage] could not delete", mediaPath, error.message);
+  }
 }

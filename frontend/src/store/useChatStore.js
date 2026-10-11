@@ -183,6 +183,54 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
+  /** Delete my own message for everyone; the socket event updates every tab. */
+  deleteMessage: async (messageId) => {
+    const { selected } = get();
+    if (!selected) return false;
+    try {
+      await axiosInstance.delete(`/conversations/${selected._id}/messages/${messageId}`);
+      get().applyMessageDeleted({ conversationId: selected._id, messageId });
+      return true;
+    } catch (error) {
+      toast.error(apiError(error, "Could not delete the message"));
+      return false;
+    }
+  },
+
+  applyMessageDeleted: ({ conversationId, messageId }) => {
+    const { selected, messages, conversations } = get();
+    if (selected?._id === conversationId) {
+      set({ messages: messages.map((m) => (m._id === messageId ? { ...m, deleted: true, text: "", image: null } : m)) });
+    }
+    // If it was the newest message, the sidebar preview changes too.
+    const deletedWasLast = selected?._id === conversationId && messages.at(-1)?._id === messageId;
+    if (deletedWasLast) {
+      set({
+        conversations: conversations.map((c) =>
+          c._id === conversationId ? { ...c, lastMessage: { ...c.lastMessage, text: "", hasImage: false, deleted: true } } : c
+        ),
+      });
+    } else if (selected?._id !== conversationId) {
+      get().getConversations();
+    }
+  },
+
+  /** "Delete chat": clears my history and drops it from my list; others keep theirs. */
+  deleteConversation: async (conversationId) => {
+    try {
+      await axiosInstance.delete(`/conversations/${conversationId}`);
+      set({
+        conversations: get().conversations.filter((c) => c._id !== conversationId),
+        ...(get().selected?._id === conversationId ? { selected: null, messages: [], typingUsers: [] } : {}),
+      });
+      toast.success("Chat deleted");
+      return true;
+    } catch (error) {
+      toast.error(apiError(error, "Could not delete the chat"));
+      return false;
+    }
+  },
+
   markRead: async (conversationId) => {
     try {
       await axiosInstance.post(`/conversations/${conversationId}/read`);
@@ -311,8 +359,10 @@ export const useChatStore = create((set, get) => ({
         conversations: get().conversations.filter((c) => c._id !== conversationId),
         ...(wasOpen ? { selected: null, messages: [], typingUsers: [] } : {}),
       });
-      if (wasOpen && reason !== "left") toast(reason === "deleted" ? "This group was deleted" : "You were removed from this group");
+      if (wasOpen && reason !== "left" && reason !== "cleared") toast(reason === "deleted" ? "This group was deleted" : "You were removed from this group");
     });
+
+    socket.off("messageDeleted").on("messageDeleted", (payload) => get().applyMessageDeleted(payload));
 
     // After a dropped connection, fetch whatever was missed while offline.
     socket.io.off("reconnect").on("reconnect", () => get().resync());
@@ -342,7 +392,8 @@ export const useChatStore = create((set, get) => ({
       .off("conversationRead")
       .off("conversationCreated")
       .off("conversationUpdated")
-      .off("conversationRemoved");
+      .off("conversationRemoved")
+      .off("messageDeleted");
     socket.io.off("reconnect");
   },
 

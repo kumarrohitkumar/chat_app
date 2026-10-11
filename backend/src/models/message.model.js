@@ -40,7 +40,7 @@ const messageSchema = new mongoose.Schema(
 messageSchema.index({ conversationId: 1, createdAt: -1 });
 
 messageSchema.pre("validate", function requireContent(next) {
-  if (!this.text && !this.image) {
+  if (!this.text && !this.image && !this.deletedAt) {
     next(new Error("A message needs text or an image"));
     return;
   }

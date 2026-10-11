@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, Check, CheckCheck, Loader2 } from "lucide-react";
+import { ArrowDown, Ban, Check, CheckCheck, Loader2, Trash2 } from "lucide-react";
 
 import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
@@ -21,6 +21,7 @@ const ChatContainer = () => {
     hasMore,
     selected,
     typingUsers,
+    deleteMessage,
   } = useChatStore();
   const { authUser } = useAuthStore();
 
@@ -35,6 +36,8 @@ const ChatContainer = () => {
 
   const isGroup = selected.type === "group";
   const otherMemberCount = selected.members.length - 1;
+
+  const [confirmingDelete, setConfirmingDelete] = useState(null);
 
   useEffect(() => {
     setSettledCount(0);
@@ -186,7 +189,7 @@ const ChatContainer = () => {
                 </div>
               )}
 
-              <div className={`chat ${isMine ? "chat-end" : "chat-start"}`}>
+              <div className={`group/msg chat ${isMine ? "chat-end" : "chat-start"}`}>
                 <div className="chat-image avatar">
                   <div className="size-10 rounded-full border border-base-300">
                     <Avatar
@@ -204,8 +207,24 @@ const ChatContainer = () => {
                     </span>
                   )}
                   <time className="text-xs opacity-50">{formatMessageTime(message.createdAt)}</time>
+                  {isMine && !message.deleted && (
+                    <button
+                      onClick={() => setConfirmingDelete(message._id)}
+                      aria-label="Delete message"
+                      title="Delete for everyone"
+                      className="press btn btn-ghost btn-xs btn-circle opacity-60 sm:opacity-0 sm:group-hover/msg:opacity-60 focus:opacity-100 hover:!opacity-100 hover:text-error"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  )}
                 </div>
 
+                {message.deleted ? (
+                  <div className="chat-bubble bg-base-200 text-base-content/50 italic flex items-center gap-1.5">
+                    <Ban className="size-3.5" aria-hidden="true" />
+                    {isMine ? "You deleted this message" : "This message was deleted"}
+                  </div>
+                ) : (
                 <div className="chat-bubble flex flex-col gap-1 transition-shadow hover:shadow-md">
                   {message.image && (
                     <a href={message.image} target="_blank" rel="noreferrer">
@@ -219,8 +238,27 @@ const ChatContainer = () => {
                   )}
                   {message.text && <p className="whitespace-pre-wrap break-words">{message.text}</p>}
                 </div>
+                )}
 
-                {isMine && (
+                {confirmingDelete === message._id && (
+                  <div role="alertdialog" aria-label="Delete message" className="chat-footer mt-1 flex items-center gap-2 text-xs animate-fade-in">
+                    <span className="text-base-content/70">Delete for everyone?</span>
+                    <button onClick={() => setConfirmingDelete(null)} className="press btn btn-ghost btn-xs">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setConfirmingDelete(null);
+                        await deleteMessage(message._id);
+                      }}
+                      className="press btn btn-error btn-xs"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+
+                {isMine && !message.deleted && confirmingDelete !== message._id && (
                   <div className="chat-footer opacity-50 text-xs flex items-center gap-1 mt-0.5">
                     <span className="flex items-center gap-1 animate-fade-in">
                       {icon}

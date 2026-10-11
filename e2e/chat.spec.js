@@ -89,6 +89,31 @@ test.describe.serial("chat end to end", () => {
     await expect(bubble(bilal.page, "Sent while you were offline")).toBeVisible({ timeout: 30_000 });
   });
 
+  test("deleting a message updates both screens; deleting a chat clears it for me only", async () => {
+    await send(asha.page, "Please ignore this one");
+    await expect(bubble(bilal.page, "Please ignore this one")).toBeVisible();
+
+    const row = asha.page.locator(".chat").filter({ hasText: "Please ignore this one" }).last();
+    await row.hover();
+    await row.getByLabel("Delete message").click();
+    await asha.page.getByRole("alertdialog", { name: "Delete message" }).getByRole("button", { name: "Delete" }).click();
+    await expect(bubble(asha.page, "You deleted this message")).toBeVisible();
+    await expect(bubble(bilal.page, "This message was deleted")).toBeVisible();
+    await expect(bilal.page.getByText("Please ignore this one")).toHaveCount(0);
+
+    await asha.page.getByLabel("Delete chat").click();
+    await asha.page.getByRole("alertdialog", { name: "Delete chat" }).getByRole("button", { name: "Delete chat" }).click();
+    await expect(sidebarChat(asha.page, PEOPLE.bilal)).toHaveCount(0);
+    // Bilal still has the whole conversation.
+    await expect(bubble(bilal.page, "Yes")).toBeVisible();
+
+    // A new message brings the chat back for Asha, with only the new message.
+    await send(bilal.page, "Back again");
+    await sidebarChat(asha.page, PEOPLE.bilal).click();
+    await expect(bubble(asha.page, "Back again")).toBeVisible();
+    await expect(asha.page.getByText("Hi Bilal, are you around?")).toHaveCount(0);
+  });
+
   test("a group: create, chat, Seen by all, then remove someone with confirmation", async () => {
     const groupName = `E2E squad ${RUN}`;
     await asha.page.getByRole("button", { name: "Start a new chat" }).click();

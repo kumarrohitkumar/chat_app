@@ -1,10 +1,11 @@
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
-import { uploadImage } from "../lib/storage.js";
+import { removeImage, uploadImage } from "../lib/storage.js";
 import { emitToConversation, emitToUser, syncSocketRooms } from "../lib/socket.js";
 import { optionalText, requireImageDataUrl, ValidationError } from "../lib/validate.js";
 import {
   ForbiddenError,
+  NotFoundError,
   appendMessage,
   createGroup,
   findOrCreateDirect,
@@ -223,6 +224,12 @@ export async function removeMember(req, res, next) {
   }
 }
 
+/** A deleted message keeps its place in the transcript but loses its content. */
+function presentMessage(message) {
+  if (!message.deletedAt) return { ...message, deleted: false };
+  return { ...message, text: "", image: null, deleted: true };
+}
+
 export async function getMessages(req, res, next) {
   try {
     const conversation = await requireMembership(req.params.id, req.user._id);
@@ -234,9 +241,16 @@ export async function getMessages(req, res, next) {
       throw new ValidationError("Invalid `before` timestamp");
     }
 
+    // Hide whatever came before I cleared this chat.
+    const me = conversation.members.find((m) => String(m.user) === String(req.user._id));
+    const createdAt = {
+      ...(before ? { $lt: before } : {}),
+      ...(me?.clearedAt ? { $gt: me.clearedAt } : {}),
+    };
+
     const page = await Message.find({
       conversationId: conversation._id,
-      ...(before ? { createdAt: { $lt: before } } : {}),
+      ...(Object.keys(createdAt).length ? { createdAt } : {}),
     })
       .sort({ createdAt: -1 })
       .limit(limit + 1)
@@ -247,7 +261,7 @@ export async function getMessages(req, res, next) {
 
     res.status(200).json({
       messages: messages.map((message) => ({
-        ...message,
+        ...presentMessage(message),
         // How many other members have read it — "Seen" or "Seen by 3".
         readBy: readCountAt(conversation, req.user._id, message.createdAt),
       })),
@@ -302,6 +316,71 @@ export async function markRead(req, res, next) {
     });
 
     res.status(200).json({ lastReadAt: me.lastReadAt });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * DELETE /api/conversations/:id/messages/:messageId
+ * The sender deletes their own message for everyone. The bubble stays as
+ * "This message was deleted" so replies around it still make sense.
+ */
+export async function deleteMessage(req, res, next) {
+  try {
+    const conversation = await requireMembership(req.params.id, req.user._id);
+    const message = await Message.findOne({
+      _id: toObjectId(req.params.messageId, "message id"),
+      conversationId: conversation._id,
+    });
+    if (!message) throw new NotFoundError("Message not found");
+    if (message.system || String(message.senderId) !== String(req.user._id)) {
+      throw new ForbiddenError("You can only delete messages you sent");
+    }
+
+    if (!message.deletedAt) {
+      const image = message.image;
+      await Message.updateOne({ _id: message._id }, { $set: { deletedAt: new Date(), text: "" }, $unset: { image: 1 } });
+      await removeImage(image);
+
+      // If it was the latest message, the sidebar preview must not keep showing it.
+      if (conversation.lastMessageAt && message.createdAt.getTime() === conversation.lastMessageAt.getTime()) {
+        conversation.lastMessage = { text: "", senderId: message.senderId, hasImage: false, system: false, deleted: true };
+        await conversation.save();
+      }
+
+      emitToConversation(conversation, "messageDeleted", {
+        conversationId: conversation._id,
+        messageId: message._id,
+      });
+    }
+
+    res.status(200).json({ deleted: true, messageId: message._id });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * DELETE /api/conversations/:id
+ * "Delete chat" for me only: clears my history and takes the chat off my
+ * list until someone writes again. Nobody else is affected, and I stay a
+ * member of a group.
+ */
+export async function deleteConversationForMe(req, res, next) {
+  try {
+    const conversation = await requireMembership(req.params.id, req.user._id);
+    const me = conversation.members.find((m) => String(m.user) === String(req.user._id));
+    const now = new Date();
+    me.clearedAt = now;
+    me.lastReadAt = now;
+    me.hidden = true;
+    await conversation.save();
+
+    // My other tabs drop it too.
+    emitToUser(req.user._id, "conversationRemoved", { conversationId: conversation._id, reason: "cleared" });
+
+    res.status(200).json({ deleted: true });
   } catch (error) {
     next(error);
   }
