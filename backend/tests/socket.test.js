@@ -224,3 +224,79 @@ describe("conversation rooms", () => {
     leaverSocket.close();
   });
 });
+
+describe("hardening", () => {
+  /** Wait for the server to have put the socket in its rooms. */
+  const ready = (socket) => new Promise((resolve) => socket.once("ready", resolve));
+
+  async function openReady(cookie) {
+    const jwtCookie = cookie.find((c) => c.startsWith("jwt=")).split(";")[0];
+    const socket = connect(url, { extraHeaders: { Cookie: jwtCookie }, reconnection: false });
+    await ready(socket);
+    return socket;
+  }
+
+  it("ignores typing events from someone outside the conversation", async () => {
+    const a = await register();
+    const b = await register();
+    const outsider = await register();
+    const group = await createGroup(a, "Core team", [b.user._id]);
+
+    const bSocket = await openReady(b.cookie);
+    const outsiderSocket = await openReady(outsider.cookie);
+
+    const got = waitFor(bSocket, "userTyping", 1500);
+    outsiderSocket.emit("typing", { conversationId: group._id });
+    expect(await got).toBeNull();
+
+    bSocket.close();
+    outsiderSocket.close();
+  });
+
+  it("clears a typing indicator when the typer disconnects", async () => {
+    const a = await register();
+    const b = await register();
+    const group = await createGroup(a, "Core team", [b.user._id]);
+
+    const aSocket = await openReady(a.cookie);
+    const bSocket = await openReady(b.cookie);
+
+    const typing = waitFor(bSocket, "userTyping");
+    aSocket.emit("typing", { conversationId: group._id });
+    expect(await typing).toMatchObject({ from: a.user._id });
+
+    const stopped = waitFor(bSocket, "userStoppedTyping");
+    aSocket.close();
+    expect(await stopped).toMatchObject({ conversationId: group._id, from: a.user._id });
+
+    bSocket.close();
+  });
+
+  it("refuses a valid token for an account that no longer exists", async () => {
+    const { cookie, user } = await register();
+    const { default: User } = await import("../src/models/user.model.js");
+    await User.deleteOne({ _id: user._id });
+    const jwtCookie = cookie.find((c) => c.startsWith("jwt=")).split(";")[0];
+    expect(await attempt({ extraHeaders: { Cookie: jwtCookie } })).toBe("unauthorized");
+  });
+
+  it("tells a removed member, and the last member of a deleted group, that the chat is gone", async () => {
+    const a = await register();
+    const b = await register();
+    const c = await register();
+    const group = await createGroup(a, "Short lived", [b.user._id, c.user._id]);
+
+    const cSocket = await openReady(c.cookie);
+    const removed = waitFor(cSocket, "conversationRemoved");
+    await as(a.cookie).delete(`/api/conversations/${group._id}/members/${c.user._id}`).expect(200);
+    expect(await removed).toMatchObject({ conversationId: group._id });
+
+    const bSocket = await openReady(b.cookie);
+    const deleted = waitFor(bSocket, "conversationRemoved");
+    await as(a.cookie).delete(`/api/conversations/${group._id}/members/${a.user._id}`).expect(200);
+    expect(await deleted).toMatchObject({ conversationId: group._id, reason: "deleted" });
+
+    cSocket.close();
+    bSocket.close();
+  });
+});

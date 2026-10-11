@@ -37,14 +37,19 @@ const clientOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-const cloudinary = {
-  cloudName: process.env.CLOUDINARY_CLOUD_NAME?.trim() || "",
-  apiKey: process.env.CLOUDINARY_API_KEY?.trim() || "",
-  apiSecret: process.env.CLOUDINARY_API_SECRET?.trim() || "",
+const s3 = {
+  bucket: process.env.S3_BUCKET?.trim() || "",
+  region: process.env.S3_REGION?.trim() || "ap-south-1",
+  accessKeyId: process.env.S3_ACCESS_KEY_ID?.trim() || "",
+  secretAccessKey: process.env.S3_SECRET_ACCESS_KEY?.trim() || "",
 };
 
-/** Images are optional. Without these keys the app runs, minus image upload. */
-cloudinary.enabled = Boolean(cloudinary.cloudName && cloudinary.apiKey && cloudinary.apiSecret);
+/** Without a bucket, images are kept in memory (fine for tests and local runs). */
+s3.enabled = Boolean(s3.bucket);
+if (isProduction && !s3.enabled) {
+  console.error("\nS3_BUCKET is required in production so images survive restarts.\n");
+  process.exit(1);
+}
 
 export const env = {
   nodeEnv,
@@ -54,5 +59,5 @@ export const env = {
   mongoUri: required("MONGO_URI"),
   jwtSecret,
   clientOrigins,
-  cloudinary,
+  s3,
 };

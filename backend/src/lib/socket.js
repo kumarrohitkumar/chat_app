@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 import { env } from "./env.js";
 import { readTokenFromCookieHeader, verifyToken } from "./token.js";
 import Conversation from "../models/conversation.model.js";
+import User from "../models/user.model.js";
 
 /**
  * Who is online: userId -> set of socket ids.
@@ -92,13 +93,14 @@ export function initSocket(httpServer) {
    * Previously the browser sent `?userId=...` and the server believed it, so
    * anyone could appear online as anyone else.
    */
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     try {
       const token = readTokenFromCookieHeader(socket.handshake.headers.cookie);
       if (!token) return next(new Error("unauthorized"));
 
       const { userId } = verifyToken(token);
-      if (!userId) return next(new Error("unauthorized"));
+      // A token outlives a deleted account; check the user still exists.
+      if (!userId || !(await User.exists({ _id: userId }))) return next(new Error("unauthorized"));
 
       socket.userId = String(userId);
       next();
@@ -121,15 +123,29 @@ export function initSocket(httpServer) {
     socket.emit("ready");
 
     // Typing goes to the conversation's room, so a group sees it too. The
-    // sender is excluded — nobody needs to watch themselves type.
+    // sender is excluded — nobody needs to watch themselves type. A socket is
+    // only in the rooms of conversations its user belongs to, so that is the
+    // membership check.
+    const typingIn = new Set();
+    const isMember = (conversationId) => typeof conversationId === "string" && socket.rooms.has(room(conversationId));
+
     socket.on("typing", ({ conversationId } = {}) => {
-      if (!conversationId) return;
+      if (!isMember(conversationId)) return;
+      typingIn.add(conversationId);
       socket.to(room(conversationId)).emit("userTyping", { conversationId, from: userId });
     });
 
     socket.on("stopTyping", ({ conversationId } = {}) => {
-      if (!conversationId) return;
+      if (!isMember(conversationId)) return;
+      typingIn.delete(conversationId);
       socket.to(room(conversationId)).emit("userStoppedTyping", { conversationId, from: userId });
+    });
+
+    // Rooms are already gone by "disconnect", so clear indicators while leaving.
+    socket.on("disconnecting", () => {
+      for (const conversationId of typingIn) {
+        socket.to(room(conversationId)).emit("userStoppedTyping", { conversationId, from: userId });
+      }
     });
 
     socket.on("disconnect", () => {

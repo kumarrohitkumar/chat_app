@@ -1,7 +1,7 @@
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
-import { uploadImage } from "../lib/cloudinary.js";
-import { emitToConversation, syncSocketRooms } from "../lib/socket.js";
+import { uploadImage } from "../lib/storage.js";
+import { emitToConversation, emitToUser, syncSocketRooms } from "../lib/socket.js";
 import { optionalText, requireImageDataUrl, ValidationError } from "../lib/validate.js";
 import {
   ForbiddenError,
@@ -23,13 +23,18 @@ function requireGroupName(value) {
   return name;
 }
 
-/** Everyone except me — the people a new chat can be started with. */
+/**
+ * Everyone except me — the people a new chat can be started with. Names and
+ * photos only: listing every user's email to every user leaks them. Someone
+ * who knows an exact email can still find that person with ?email=.
+ */
 export async function getContacts(req, res, next) {
   try {
-    const users = await User.find({ _id: { $ne: req.user._id } })
-      .select("fullName email profilePic")
-      .sort({ fullName: 1 })
-      .lean();
+    const email = typeof req.query.email === "string" ? req.query.email.trim().toLowerCase() : "";
+    const filter = { _id: { $ne: req.user._id } };
+    if (email) filter.email = email;
+
+    const users = await User.find(filter).select("fullName profilePic").sort({ fullName: 1 }).lean();
 
     res.status(200).json(users);
   } catch (error) {
@@ -104,7 +109,7 @@ export async function renameGroup(req, res, next) {
     conversation.name = name;
 
     if (req.body.image) {
-      conversation.image = await uploadImage(requireImageDataUrl(req.body.image), "chatify/groups");
+      conversation.image = await uploadImage(requireImageDataUrl(req.body.image), "groups", conversation._id);
     }
 
     await conversation.save();
@@ -184,9 +189,13 @@ export async function removeMember(req, res, next) {
     conversation.members = conversation.members.filter((m) => String(m.user) !== targetId);
 
     if (conversation.members.length < 2) {
-      // Nobody left to talk to — remove the group and its history.
+      // Nobody left to talk to — remove the group and its history, and tell
+      // whoever is left (and the person leaving, in their other tabs).
       await Message.deleteMany({ conversationId: conversation._id });
       await conversation.deleteOne();
+      for (const memberId of [...conversation.memberIds(), targetId]) {
+        emitToUser(memberId, "conversationRemoved", { conversationId: conversation._id, reason: "deleted" });
+      }
       return res.status(200).json({ removed: true, conversationDeleted: true });
     }
 
@@ -205,6 +214,8 @@ export async function removeMember(req, res, next) {
     syncSocketRooms(conversation);
     emitToConversation(conversation, "newMessage", note);
     emitToConversation(conversation, "conversationUpdated", { conversationId: conversation._id });
+    // They have left the room by now, so tell them directly.
+    emitToUser(targetId, "conversationRemoved", { conversationId: conversation._id, reason: isSelf ? "left" : "removed" });
 
     res.status(200).json({ removed: true, conversationDeleted: false });
   } catch (error) {
@@ -257,7 +268,7 @@ export async function sendMessage(req, res, next) {
     if (!text && !hasImage) throw new ValidationError("A message needs text or an image");
 
     const image = hasImage
-      ? await uploadImage(requireImageDataUrl(req.body.image), "chatify/messages")
+      ? await uploadImage(requireImageDataUrl(req.body.image), "messages", conversation._id)
       : undefined;
 
     const message = await appendMessage(conversation, { senderId: req.user._id, text, image });

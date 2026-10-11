@@ -127,30 +127,31 @@ export async function appendMessage(conversation, { senderId, text, image, syste
 export async function listForUser(userId) {
   const conversations = await Conversation.find({ "members.user": userId })
     .sort({ lastMessageAt: -1, updatedAt: -1 })
-    .populate("members.user", "fullName email profilePic")
+    .populate("members.user", "fullName profilePic")
     .lean();
 
   if (conversations.length === 0) return [];
 
+  // Count only what is unread: messages from others after my lastReadAt, per
+  // conversation. Uses the { conversationId, createdAt } index and returns one
+  // small row per conversation instead of pulling every message into memory.
+  const lastRead = (c) => c.members.find((m) => String(m.user._id) === String(userId))?.lastReadAt ?? new Date(0);
   const unreadRows = await Message.aggregate([
-    { $match: { conversationId: { $in: conversations.map((c) => c._id) } } },
     {
-      $group: {
-        _id: "$conversationId",
-        messages: { $push: { at: "$createdAt", senderId: "$senderId", system: "$system" } },
+      $match: {
+        $or: conversations.map((c) => ({ conversationId: c._id, createdAt: { $gt: lastRead(c) } })),
+        senderId: { $ne: new mongoose.Types.ObjectId(String(userId)) },
+        system: { $ne: true },
       },
     },
+    { $group: { _id: "$conversationId", n: { $sum: 1 } } },
   ]);
 
-  const byConversation = new Map(unreadRows.map((row) => [String(row._id), row.messages]));
+  const byConversation = new Map(unreadRows.map((row) => [String(row._id), row.n]));
 
   return conversations.map((conversation) => {
     const me = conversation.members.find((m) => String(m.user._id) === String(userId));
-    const since = me?.lastReadAt ?? new Date(0);
-
-    const unreadCount = (byConversation.get(String(conversation._id)) ?? []).filter(
-      (m) => !m.system && String(m.senderId) !== String(userId) && m.at > since
-    ).length;
+    const unreadCount = byConversation.get(String(conversation._id)) ?? 0;
 
     const others = conversation.members.filter((m) => String(m.user._id) !== String(userId));
 
@@ -163,7 +164,6 @@ export async function listForUser(userId) {
       members: conversation.members.map((m) => ({
         _id: m.user._id,
         fullName: m.user.fullName,
-        email: m.user.email,
         profilePic: m.user.profilePic,
         role: m.role,
       })),

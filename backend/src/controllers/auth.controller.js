@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import User from "../models/user.model.js";
 import { setAuthCookie, clearAuthCookie } from "../lib/token.js";
-import { uploadImage } from "../lib/cloudinary.js";
+import { uploadImage } from "../lib/storage.js";
 import {
   requireEmail,
   requireName,
@@ -70,7 +70,7 @@ export async function updateProfile(req, res, next) {
 
     if (req.body.profilePic !== undefined) {
       const dataUrl = requireImageDataUrl(req.body.profilePic);
-      update.profilePic = await uploadImage(dataUrl, "chatify/avatars");
+      update.profilePic = await uploadImage(dataUrl, "avatars", req.user._id);
     }
 
     if (req.body.fullName !== undefined) {

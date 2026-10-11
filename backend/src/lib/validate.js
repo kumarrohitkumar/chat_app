@@ -24,7 +24,7 @@ export function requireName(value) {
 
 export function requirePassword(value) {
   const password = String(value ?? "");
-  if (password.length < 6) throw new ValidationError("Password must be at least 6 characters");
+  if (password.length < 8) throw new ValidationError("Password must be at least 8 characters");
   if (password.length > 128) throw new ValidationError("Password must be under 128 characters");
   return password;
 }

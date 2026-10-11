@@ -7,7 +7,8 @@ import helmet from "helmet";
 import mongoose from "mongoose";
 
 import { env } from "./lib/env.js";
-import { imagesEnabled } from "./lib/cloudinary.js";
+import { imagesEnabled } from "./lib/storage.js";
+import mediaRoutes from "./routes/media.route.js";
 import authRoutes from "./routes/auth.route.js";
 import conversationRoutes from "./routes/conversation.route.js";
 import { apiLimiter } from "./middleware/rateLimit.middleware.js";
@@ -47,8 +48,12 @@ export function createApp({ rateLimit = true } = {}) {
 
   // Images arrive as base64 inside the JSON body. Express defaults to 100 kb,
   // which silently rejected every real photo.
-  app.use(express.json({ limit: "6mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "6mb" }));
+  // Only signed-in routes that carry images get the big limit; everything
+  // else (sign-up, login) stays small so anonymous requests can't be huge.
+  const bigJson = express.json({ limit: "6mb" });
+  app.use(["/api/conversations", "/api/auth/update-profile"], bigJson);
+  app.use(express.json({ limit: "100kb" }));
+  app.use(express.urlencoded({ extended: true, limit: "100kb" }));
   app.use(cookieParser());
 
   // In production the API and the app share one origin, so CORS is only needed
@@ -74,6 +79,7 @@ export function createApp({ rateLimit = true } = {}) {
 
   app.use("/api/auth", authRoutes);
   app.use("/api/conversations", conversationRoutes);
+  app.use("/api/media", mediaRoutes);
 
   // An unknown /api path is a 404 in JSON, not the SPA's index.html.
   app.use("/api", notFound);

@@ -13,7 +13,14 @@ export function errorHandler(error, req, res, _next) {
     console.error(`[error] ${req.method} ${req.originalUrl}`, error);
   }
 
-  const message = deliberate ? error.message : "Something went wrong on our side";
+  const message =
+    error.type === "entity.too.large"
+      ? "That request is too large"
+      : error.type === "entity.parse.failed"
+        ? "The request body is not valid JSON"
+        : deliberate
+          ? error.message
+          : "Something went wrong on our side";
 
   res.status(status).json({
     message,
