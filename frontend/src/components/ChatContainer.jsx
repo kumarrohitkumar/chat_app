@@ -97,7 +97,9 @@ const ChatContainer = () => {
       <div className="flex-1 flex flex-col overflow-auto">
         <ChatHeader />
         <MessageSkeleton />
-        <MessageInput />
+        {/* Same key in both layouts, so React keeps the composer (and what
+            the user is typing) while messages load. */}
+        <MessageInput key="composer" />
       </div>
     );
   }
@@ -246,7 +248,7 @@ const ChatContainer = () => {
         <div ref={bottomRef} />
       </div>
 
-      <MessageInput />
+      <MessageInput key="composer" />
     </div>
   );
 };
