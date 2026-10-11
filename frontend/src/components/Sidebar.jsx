@@ -29,7 +29,7 @@ const Sidebar = () => {
     return conversations.filter(
       (c) =>
         c.name.toLowerCase().includes(needle) ||
-        c.members.some((m) => m.email.toLowerCase().includes(needle))
+        c.members.some((m) => m.fullName.toLowerCase().includes(needle))
     );
   }, [conversations, query]);
 

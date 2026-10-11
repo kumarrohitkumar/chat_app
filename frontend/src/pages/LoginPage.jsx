@@ -38,7 +38,7 @@ const LoginPage = () => {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="form-control">
-              <label className="label">
+              <label className="label" htmlFor="email">
                 <span className="label-text font-medium">Email</span>
               </label>
               <div className="relative">
@@ -46,6 +46,8 @@ const LoginPage = () => {
                   <Mail className="h-5 w-5 text-base-content/40" />
                 </div>
                 <input
+                  id="email"
+                  autoComplete="email"
                   type="email"
                   className="input input-bordered w-full pl-10 transition-all duration-200 focus:ring-2 focus:ring-primary/30"
                   placeholder="you@example.com"
@@ -56,7 +58,7 @@ const LoginPage = () => {
             </div>
 
             <div className="form-control">
-              <label className="label">
+              <label className="label" htmlFor="password">
                 <span className="label-text font-medium">Password</span>
               </label>
               <div className="relative">
@@ -64,6 +66,8 @@ const LoginPage = () => {
                   <Lock className="h-5 w-5 text-base-content/40" />
                 </div>
                 <input
+                  id="password"
+                  autoComplete="current-password"
                   type={showPassword ? "text" : "password"}
                   className="input input-bordered w-full pl-10 transition-all duration-200 focus:ring-2 focus:ring-primary/30"
                   placeholder="••••••••"
@@ -73,6 +77,7 @@ const LoginPage = () => {
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (

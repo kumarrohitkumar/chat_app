@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { axiosInstance, apiError } from "../lib/axios.js";
 import { useAuthStore } from "./useAuthStore.js";
 import { playChime, showMessageNotification } from "../lib/notify.js";
+import { applyRead, mergeMessages } from "../lib/receipts.js";
 
 const TYPING_IDLE_MS = 2000;
 
@@ -75,15 +76,28 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  renameGroup: async (conversationId, name) => {
+  /** Rename a group and/or change its photo (image is a data URL). */
+  updateGroup: async (conversationId, { name, image }) => {
     try {
-      await axiosInstance.patch(`/conversations/${conversationId}`, { name });
+      await axiosInstance.patch(`/conversations/${conversationId}`, { name, ...(image ? { image } : {}) });
       await get().getConversations();
-      toast.success("Group renamed");
+      toast.success(image ? "Group photo updated" : "Group renamed");
       return true;
     } catch (error) {
-      toast.error(apiError(error, "Could not rename the group"));
+      toast.error(apiError(error, "Could not update the group"));
       return false;
+    }
+  },
+
+  renameGroup: (conversationId, name) => get().updateGroup(conversationId, { name }),
+
+  /** Find someone by their exact email (contacts no longer list emails). */
+  findByEmail: async (email) => {
+    try {
+      const res = await axiosInstance.get("/conversations/contacts", { params: { email } });
+      return res.data;
+    } catch {
+      return [];
     }
   },
 
@@ -278,21 +292,44 @@ export const useChatStore = create((set, get) => ({
       set({ typingUsers: get().typingUsers.filter((id) => id !== from) });
     });
 
-    socket.off("conversationRead").on("conversationRead", ({ conversationId, by }) => {
+    socket.off("conversationRead").on("conversationRead", ({ conversationId, by, at, previousAt }) => {
       const authUser = useAuthStore.getState().authUser;
       if (get().selected?._id !== conversationId || by === authUser?._id) return;
 
-      // Someone else caught up: bump the read count on my own messages.
-      set({
-        messages: get().messages.map((m) =>
-          m.senderId === authUser?._id ? { ...m, readBy: (m.readBy ?? 0) + 1 } : m
-        ),
-      });
+      // Count this reader once, only on my messages they have now seen for the first time.
+      set({ messages: applyRead(get().messages, authUser?._id, { at, previousAt }) });
     });
 
     const refresh = () => get().getConversations();
     socket.off("conversationCreated").on("conversationCreated", refresh);
     socket.off("conversationUpdated").on("conversationUpdated", refresh);
+
+    // Removed from a group, or the group was deleted: drop it everywhere.
+    socket.off("conversationRemoved").on("conversationRemoved", ({ conversationId, reason }) => {
+      const wasOpen = get().selected?._id === conversationId;
+      set({
+        conversations: get().conversations.filter((c) => c._id !== conversationId),
+        ...(wasOpen ? { selected: null, messages: [], typingUsers: [] } : {}),
+      });
+      if (wasOpen && reason !== "left") toast(reason === "deleted" ? "This group was deleted" : "You were removed from this group");
+    });
+
+    // After a dropped connection, fetch whatever was missed while offline.
+    socket.io.off("reconnect").on("reconnect", () => get().resync());
+  },
+
+  resync: async () => {
+    await get().getConversations();
+    const { selected } = get();
+    if (!selected) return;
+    try {
+      const res = await axiosInstance.get(`/conversations/${selected._id}/messages`);
+      if (get().selected?._id !== selected._id) return;
+      set({ messages: mergeMessages(get().messages, res.data.messages), typingUsers: [] });
+      get().markRead(selected._id);
+    } catch {
+      // The banner already says we are reconnecting; the next event will retry.
+    }
   },
 
   unsubscribeFromMessages: () => {
@@ -304,7 +341,9 @@ export const useChatStore = create((set, get) => ({
       .off("userStoppedTyping")
       .off("conversationRead")
       .off("conversationCreated")
-      .off("conversationUpdated");
+      .off("conversationUpdated")
+      .off("conversationRemoved");
+    socket.io.off("reconnect");
   },
 
   select: (conversation) => {

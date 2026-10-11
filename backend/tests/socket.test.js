@@ -300,3 +300,25 @@ describe("hardening", () => {
     bSocket.close();
   });
 });
+
+describe("read receipts", () => {
+  it("sends the reader's previous read time with each read event", async () => {
+    const a = await register();
+    const b = await register();
+    const group = await createGroup(a, "Readers", [b.user._id]);
+    const jwtCookie = a.cookie.find((c) => c.startsWith("jwt=")).split(";")[0];
+    const aSocket = connect(url, { extraHeaders: { Cookie: jwtCookie }, reconnection: false });
+    await new Promise((resolve) => aSocket.once("ready", resolve));
+
+    await say(a, group._id, "hello");
+    const first = waitFor(aSocket, "conversationRead");
+    await as(b.cookie).post(`/api/conversations/${group._id}/read`).expect(200);
+    const one = await first;
+    expect(one).toMatchObject({ by: b.user._id, at: expect.any(String) });
+
+    const second = waitFor(aSocket, "conversationRead");
+    await as(b.cookie).post(`/api/conversations/${group._id}/read`).expect(200);
+    expect((await second).previousAt).toBe(one.at);
+    aSocket.close();
+  });
+});

@@ -88,7 +88,9 @@ export const useAuthStore = create((set, get) => ({
    */
   connectSocket: () => {
     const { authUser, socket } = get();
-    if (!authUser || socket?.connected) return;
+    // An existing socket, even one still connecting, is reused: checking only
+    // `connected` used to open a second socket during the handshake.
+    if (!authUser || socket) return;
 
     const next = io({ withCredentials: true, autoConnect: true });
 

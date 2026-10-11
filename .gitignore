@@ -34,3 +34,5 @@ lerna-debug.log*
 
 # Stray binaries
 *.exe
+test-results
+playwright-report

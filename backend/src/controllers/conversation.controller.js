@@ -288,13 +288,17 @@ export async function markRead(req, res, next) {
     const conversation = await requireMembership(req.params.id, req.user._id);
 
     const me = conversation.members.find((m) => String(m.user) === String(req.user._id));
+    const previousAt = me.lastReadAt ?? null;
     me.lastReadAt = new Date();
     await conversation.save();
 
+    // previousAt lets clients count this reader once, only for messages that
+    // fall between their last read and now.
     emitToConversation(conversation, "conversationRead", {
       conversationId: conversation._id,
       by: String(req.user._id),
       at: me.lastReadAt.toISOString(),
+      previousAt: previousAt ? previousAt.toISOString() : null,
     });
 
     res.status(200).json({ lastReadAt: me.lastReadAt });

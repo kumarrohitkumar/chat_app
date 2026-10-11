@@ -5,7 +5,8 @@ import Avatar from "./Avatar";
 
 /** Pick one person for a direct chat, or several for a group. */
 const NewChatModal = ({ onClose }) => {
-  const { contacts, getContacts, openDirect, createGroup } = useChatStore();
+  const { contacts, getContacts, openDirect, createGroup, findByEmail } = useChatStore();
+  const [emailMatches, setEmailMatches] = useState([]);
 
   const [mode, setMode] = useState("direct");
   const [query, setQuery] = useState("");
@@ -23,14 +24,31 @@ const NewChatModal = ({ onClose }) => {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Contacts carry names only. A full email address is looked up on the
+  // server, which returns that one person if they exist.
+  const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query.trim());
+  useEffect(() => {
+    if (!looksLikeEmail) {
+      setEmailMatches([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const found = await findByEmail(query.trim());
+      if (!cancelled) setEmailMatches(found);
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, looksLikeEmail, findByEmail]);
+
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return contacts;
-    return contacts.filter(
-      (c) =>
-        c.fullName.toLowerCase().includes(needle) || c.email.toLowerCase().includes(needle)
-    );
-  }, [contacts, query]);
+    if (looksLikeEmail) return emailMatches;
+    return contacts.filter((c) => c.fullName.toLowerCase().includes(needle));
+  }, [contacts, query, looksLikeEmail, emailMatches]);
 
   const toggle = (id) =>
     setPicked((current) =>
@@ -118,7 +136,7 @@ const NewChatModal = ({ onClose }) => {
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search people"
+                placeholder="Search by name, or type an exact email"
                 aria-label="Search people"
                 className="input input-sm input-bordered w-full pl-9"
               />
@@ -142,7 +160,6 @@ const NewChatModal = ({ onClose }) => {
                   <Avatar src={person.profilePic} alt="" size="size-10" />
                   <div className="min-w-0 flex-1">
                     <div className="font-medium truncate">{person.fullName}</div>
-                    <div className="text-xs text-base-content/50 truncate">{person.email}</div>
                   </div>
                   {mode === "group" && (
                     <span
@@ -159,7 +176,7 @@ const NewChatModal = ({ onClose }) => {
 
             {visible.length === 0 && (
               <p className="text-center text-sm text-base-content/50 py-8">
-                {contacts.length === 0 ? "Nobody else has signed up yet" : "No match"}
+                {contacts.length === 0 ? "Nobody else has signed up yet" : looksLikeEmail ? "Nobody with that email" : "No match"}
               </p>
             )}
           </div>

@@ -34,9 +34,8 @@ export function createApp({ rateLimit = true } = {}) {
         ? {
             directives: {
               ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-              // Profile pictures are arbitrary HTTPS URLs (Cloudinary uploads,
-              // or whatever a seeded account points at), so allow https images
-              // while still blocking plain-http and inline script.
+              // Uploaded images come from /api/media on this origin; seeded
+              // accounts may point at https avatars, and previews use data: URLs.
               "img-src": ["'self'", "data:", "https:"],
               "connect-src": ["'self'", "ws:", "wss:"],
             },
