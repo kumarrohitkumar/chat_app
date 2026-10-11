@@ -1,0 +1,40 @@
+# Production on a single server (e.g. an EC2 instance):
+#   cd deploy && cp .env.example .env   # fill it in
+#   docker compose up -d --build
+# Caddy terminates HTTPS (certificates from Let's Encrypt) and proxies to the app,
+# including the Socket.IO websocket.
+services:
+  app:
+    build: ..
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 5001
+    expose:
+      - "5001"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  caddy-data:
+  caddy-config:

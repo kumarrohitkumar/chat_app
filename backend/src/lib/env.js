@@ -46,7 +46,9 @@ const s3 = {
 
 /** Without a bucket, images are kept in memory (fine for tests and local runs). */
 s3.enabled = Boolean(s3.bucket);
-if (isProduction && !s3.enabled) {
+// Local `docker compose` runs in production mode without a bucket and opts in
+// to in-memory images explicitly; a real deploy must not do that by accident.
+if (isProduction && !s3.enabled && process.env.ALLOW_MEMORY_IMAGES !== "true") {
   console.error("\nS3_BUCKET is required in production so images survive restarts.\n");
   process.exit(1);
 }
